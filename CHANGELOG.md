@@ -2,6 +2,14 @@
 
 Tutti gli aggiornamenti del Gestionale Bottega, dal più recente.
 
+## Versione 1.2.0 — 20 novembre 2026
+
+### Nuovo
+- **Cancella tutti i dati** (in *Altro*): svuota il magazzino per tutti — prodotti, foto, storico movimenti, prezzi e modifiche. Restano solo gli account.
+  - **Doppia conferma**: prima un riepilogo di cosa si perde, poi bisogna scrivere **CANCELLA**.
+  - Serve la connessione; gli altri telefoni e computer svuotano da soli la loro copia locale appena lo vedono.
+  - Le regole del database permettono di cancellare solo durante un azzeramento avviato da quella persona: per sbaglio non si può cancellare niente.
+
 ## Versione 1.1.0 — 20 novembre 2026
 
 ### Nuovo

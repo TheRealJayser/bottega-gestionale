@@ -3,7 +3,7 @@
 //  stato della sincronizzazione.
 // =====================================================================
 
-import { h, riempi, avviso, conferma, apriFinestra } from './dom.js';
+import { h, riempi, avviso, conferma, apriFinestra, erroreCampo } from './dom.js';
 import { icona } from './icone.js';
 import { esci, inviaRecuperoPassword } from '../servizi/auth.js';
 import { profiloCorrente } from '../servizi/utenti.js';
@@ -12,6 +12,7 @@ import { scrittureInAttesa } from '../servizi/scritture.js';
 import {
   analizzaFile, backupCompleto, eseguiImportazione, esportaCsv, esportaExcel, prezzoConRicarico, ultimoBackup,
 } from '../servizi/importa-esporta.js';
+import { cancellaTuttiIDati } from '../servizi/azzeramento.js';
 import { data, euro } from '../util/formato.js';
 import { formattaQuantita } from '../util/unita.js';
 import { VERSIONE_APP, promptInstallazione } from './installazione.js';
@@ -182,6 +183,73 @@ export function mostraAltro(contenitore) {
     }
   }
 
+  // ---------- Cancella tutti i dati (doppia conferma) ----------
+  async function cancellaTutto() {
+    if (!navigator.onLine) { avviso('Per cancellare i dati serve la connessione a Internet.', 'errore'); return; }
+    if (scrittureInAttesa()) { avviso('Ci sono operazioni non ancora inviate: aspetta che partano e riprova.', 'errore'); return; }
+    const lista = prodotti.tutti({ archiviati: true });
+
+    // Prima conferma: cosa si perde.
+    const prima = await apriFinestra({
+      titolo: 'Cancellare tutti i dati?',
+      corpo: [
+        h('p', {}, 'Verranno cancellati dal server, per tutti i dispositivi:'),
+        h('ul', { class: 'riepilogo-import' },
+          h('li', {}, h('span', {}, 'Prodotti (anche archiviati)'), h('strong', {}, lista.length)),
+          h('li', {}, h('span', {}, 'Foto'), h('strong', {}, lista.filter((p) => p.haFoto).length)),
+          h('li', {}, h('span', {}, 'Storico movimenti, prezzi e modifiche'), h('strong', {}, 'tutto')),
+        ),
+        h('p', {}, 'Restano solo gli account di chi usa l\'app.'),
+        h('p', { class: 'nota errore' }, h('strong', {}, 'Non si può annullare.'), ' Se vuoi tenere una copia, scarica prima un backup.'),
+      ],
+      pulsanti: [
+        { testo: 'Annulla', valore: null, classe: 'secondario' },
+        { testo: 'Continua', valore: 'ok', classe: 'pericolo primario' },
+      ],
+    });
+    if (prima !== 'ok') return;
+
+    // Seconda conferma: scrivere la parola.
+    const parola = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', placeholder: 'CANCELLA' });
+    const seconda = await apriFinestra({
+      titolo: 'Conferma definitiva',
+      corpo: [
+        h('p', {}, 'Per cancellare davvero tutto scrivi ', h('strong', {}, 'CANCELLA'), ' qui sotto.'),
+        h('div', { class: 'campo' }, parola, h('small', { class: 'errore-campo' })),
+      ],
+      pulsanti: [
+        { testo: 'Annulla', valore: null, classe: 'secondario' },
+        {
+          testo: 'Cancella tutto', valore: 'ok', classe: 'pericolo primario',
+          prima: () => {
+            if (parola.value.trim().toUpperCase() === 'CANCELLA') return true;
+            erroreCampo(parola, 'Scrivi CANCELLA per confermare.');
+            return false;
+          },
+        },
+      ],
+    });
+    if (seconda !== 'ok') return;
+
+    const testo = h('p', {}, 'Preparazione…');
+    const barra = h('progress', { max: 1, value: 0 });
+    const pannello = h('div', { class: 'avanzamento' }, h('p', {}, 'Cancellazione in corso, non chiudere l\'app…'), barra, testo);
+    document.body.append(pannello);
+    try {
+      const quanti = await cancellaTuttiIDati((t, fatti, totale) => {
+        testo.textContent = totale ? `${t} ${fatti} di ${totale}` : t;
+        if (totale) { barra.max = totale; barra.value = fatti; }
+      });
+      avviso(`Dati cancellati (${quanti} documenti). Il magazzino è vuoto.`, 'ok', { durata: 8000 });
+    } catch (err) {
+      console.error(err);
+      avviso('Cancellazione non completata: ' + (err?.code === 'permission-denied'
+        ? 'permesso negato (le regole del database sono aggiornate?)' : err.message) + '. Puoi riprovare.', 'errore', { durata: 12000 });
+    } finally {
+      pannello.remove();
+    }
+  }
+
   // ---------- Disegno ----------
   function disegna() {
     const ultimo = ultimoBackup();
@@ -261,6 +329,12 @@ export function mostraAltro(contenitore) {
               avviso('Elenco riscaricato', 'ok');
             }
           } }, 'Risincronizza tutto'),
+        ),
+
+        h('div', { class: 'riquadro zona-pericolosa' },
+          h('h2', {}, 'Cancella tutti i dati'),
+          h('p', { class: 'nota' }, 'Svuota il magazzino per tutti: prodotti, foto e storici. Utile per ripartire da zero, per esempio prima di importare l\'inventario. Chiede due conferme.'),
+          h('button', { class: 'pulsante pericolo', onclick: cancellaTutto }, 'Cancella tutti i dati'),
         ),
 
         h('p', { class: 'nota versione' }, `Gestionale Bottega · versione ${VERSIONE_APP}`),

@@ -3,7 +3,7 @@
 // =====================================================================
 
 /** Da aumentare a ogni pubblicazione (deve combaciare con sw.js). */
-export const VERSIONE_APP = '1.1.0';
+export const VERSIONE_APP = '1.2.0';
 
 let promptSalvato = null;
 

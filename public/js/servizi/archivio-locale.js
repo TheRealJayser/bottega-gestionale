@@ -47,6 +47,10 @@ export function salvaProdotti(lista) {
   return transazione('prodotti', 'readwrite', (s) => { lista.forEach((p) => s.put(p)); });
 }
 
+export function togliProdotti(ids) {
+  return transazione('prodotti', 'readwrite', (s) => { ids.forEach((id) => s.delete(id)); });
+}
+
 export function leggiMeta(chiave) {
   return transazione('meta', 'readonly', (s) => s.get(chiave));
 }

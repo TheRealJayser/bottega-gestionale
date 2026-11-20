@@ -38,6 +38,8 @@ const perCodice = new Map();  // codice a barre → id
 const ascoltatori = new Set();
 const statoSync = { pronto: false, daServer: false, errore: null };
 let annullaAscolto = null;
+let annullaAzzeramento = null;
+const CHIAVE_AZZERAMENTO = 'bottega.ultimoAzzeramento';
 let notificaInCoda = false;
 let risolviPronto;
 let promessaPronto = new Promise((ok) => { risolviPronto = ok; });
@@ -135,14 +137,24 @@ export async function avviaSincronizzazione() {
   }
   notifica();
 
+  ascoltaAzzeramento();
   const da = Timestamp.fromMillis(Math.max(0, ultima - MARGINE_MS));
   const q = query(collection(db, 'prodotti'), where('modificatoIl', '>', da));
 
   annullaAscolto = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
     const daSalvare = [];
+    const daTogliere = [];
     let massimo = ultima;
     snap.docChanges({ includeMetadataChanges: true }).forEach((cambio) => {
-      if (cambio.type === 'removed') return;
+      if (cambio.type === 'removed') {
+        // Un prodotto esce dall'elenco solo se è stato cancellato davvero
+        // (succede con "Cancella tutti i dati"): lo togliamo anche qui.
+        if (!snap.metadata.fromCache) {
+          rimuoviDaMemoria(cambio.doc.id);
+          daTogliere.push(cambio.doc.id);
+        }
+        return;
+      }
       const p = daDocumento(cambio.doc);
       inserisciInMemoria(p);
       daSalvare.push(p);
@@ -160,6 +172,7 @@ export async function avviaSincronizzazione() {
     }
     notifica();
 
+    if (daTogliere.length) archivio.togliProdotti(daTogliere).catch(() => {});
     if (daSalvare.length) {
       archivio.salvaProdotti(daSalvare)
         .then(() => {
@@ -184,6 +197,24 @@ export async function avviaSincronizzazione() {
 export function fermaSincronizzazione() {
   annullaAscolto?.();
   annullaAscolto = null;
+  annullaAzzeramento?.();
+  annullaAzzeramento = null;
+}
+
+/**
+ * Quando qualcuno usa "Cancella tutti i dati", sul server compare la data
+ * dell'azzeramento: ogni dispositivo che non l'ha ancora vista svuota la
+ * propria copia locale e riscarica l'elenco (ormai vuoto).
+ */
+function ascoltaAzzeramento() {
+  annullaAzzeramento = onSnapshot(doc(db, 'sistema', 'azzeramento'), (snap) => {
+    const d = snap.data();
+    if (!d || d.stato !== 'completato' || !d.completatoIl) return;
+    const quando = String(inMillisecondi(d.completatoIl));
+    if (localStorage.getItem(CHIAVE_AZZERAMENTO) === quando) return;
+    localStorage.setItem(CHIAVE_AZZERAMENTO, quando);
+    if (prodotti.size > 0) risincronizzaTutto();
+  }, (err) => console.warn('Controllo azzeramento non riuscito', err));
 }
 
 /** Cancella la copia locale e riscarica tutto (in caso di dubbi). */

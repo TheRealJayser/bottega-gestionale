@@ -13,7 +13,9 @@ rules_version = '2';
 //     movimento di magazzino con lo stesso delta (stessa scrittura).
 //  4. Gli storici (movimenti, prezzi, modifiche) si possono solo creare:
 //     mai modificare né cancellare.
-//  5. I prodotti non si cancellano: si archiviano.
+//  5. I prodotti non si cancellano: si archiviano. Unica eccezione:
+//     "Cancella tutti i dati", possibile solo mentre sistema/azzeramento
+//     è "in corso" a nome di chi cancella.
 // =====================================================================
 
 service cloud.firestore {
@@ -86,6 +88,14 @@ service cloud.firestore {
         || getAfter(/databases/$(database)/documents/codici/$(d.ean)).data.idProdotto == idProdotto;
     }
 
+    // "Cancella tutti i dati" avviato da questa persona e non ancora finito.
+    function azzeramentoInCorso() {
+      let rif = /databases/$(database)/documents/sistema/azzeramento;
+      return exists(rif)
+        && get(rif).data.stato == 'in corso'
+        && get(rif).data.utente.uid == request.auth.uid;
+    }
+
     // La quantità cambia solo con un movimento nuovo dello stesso valore.
     function quantitaCoerente() {
       let prima = resource == null ? 0 : resource.data.quantita;
@@ -122,7 +132,7 @@ service cloud.firestore {
         && codiceRiservato(idProdotto, request.resource.data)
         && quantitaCoerente();
 
-      allow delete: if false;
+      allow delete: if autorizzato() && azzeramentoInCorso();
 
       // Storico dei prezzi: solo creazione.
       match /storicoPrezzi/{idVariazione} {
@@ -134,7 +144,8 @@ service cloud.firestore {
           && (request.resource.data.nuovo == null || request.resource.data.nuovo is int)
           && firmaValida(request.resource.data.utente)
           && request.resource.data.data == request.time;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if autorizzato() && azzeramentoInCorso();
       }
 
       // Registro delle modifiche all'anagrafica: solo creazione.
@@ -147,7 +158,8 @@ service cloud.firestore {
           && request.resource.data.campi.size() <= 30
           && firmaValida(request.resource.data.utente)
           && request.resource.data.data == request.time;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if autorizzato() && azzeramentoInCorso();
       }
     }
 
@@ -163,8 +175,8 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/prodotti/$(request.resource.data.idProdotto)).data.ean == ean;
 
       // Si libera solo se il prodotto non usa più quel codice.
-      allow delete: if autorizzato()
-        && getAfter(/databases/$(database)/documents/prodotti/$(resource.data.idProdotto)).data.ean != ean;
+      allow delete: if autorizzato() && (azzeramentoInCorso()
+        || getAfter(/databases/$(database)/documents/prodotti/$(resource.data.idProdotto)).data.ean != ean);
 
       allow update: if false;
     }
@@ -192,7 +204,8 @@ service cloud.firestore {
         // Il prodotto deve essere aggiornato nella stessa scrittura.
         && getAfter(/databases/$(database)/documents/prodotti/$(request.resource.data.idProdotto)).data.ultimoMovimento == idMovimento;
 
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if autorizzato() && azzeramentoInCorso();
     }
 
     // ---------- Foto (una per prodotto, stesso ID) ----------
@@ -209,6 +222,28 @@ service cloud.firestore {
         && request.resource.data.caricataIl == request.time;
 
       allow delete: if autorizzato();
+    }
+
+    // ---------- Azzeramento ("Cancella tutti i dati") ----------
+    // Un solo documento: chi avvia la cancellazione lo mette "in corso" a
+    // suo nome; alla fine lo segna "completato" (gli altri dispositivi
+    // vedono la data e svuotano la loro copia locale).
+    match /sistema/azzeramento {
+      allow read: if autorizzato();
+      allow create, update: if autorizzato()
+        && request.resource.data.keys().hasOnly(['stato', 'utente', 'iniziatoIl', 'completatoIl'])
+        && firmaValida(request.resource.data.utente)
+        && (
+             (request.resource.data.stato == 'in corso'
+               && request.resource.data.iniziatoIl == request.time
+               && request.resource.data.completatoIl == null)
+          || (request.resource.data.stato == 'completato'
+               && resource != null
+               && resource.data.stato == 'in corso'
+               && resource.data.utente.uid == request.auth.uid
+               && request.resource.data.completatoIl == request.time)
+        );
+      allow delete: if false;
     }
 
     // Tutto il resto è vietato (comportamento predefinito).
