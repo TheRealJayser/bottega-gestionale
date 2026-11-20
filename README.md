@@ -26,6 +26,7 @@
 - **Due persone insieme** – se Gabriele e Viviana scaricano lo stesso prodotto nello stesso istante, contano entrambe le operazioni.
 - **Senza rete** – le operazioni restano sul dispositivo e partono da sole quando la connessione torna; in alto si vede quante sono in attesa.
 - **Import ed export** – importazione direttamente dal **file Excel dell'inventario** (`ean · codice · descrizione · pezzi · costo un · costo tot`) o da CSV, con righe doppie unite e ricarico per i prezzi di vendita; export in CSV ed Excel, **backup completo** con foto e movimenti.
+- **Cancella tutti i dati** – per ripartire da zero, con doppia conferma (riepilogo + scrivere *CANCELLA*); gli altri dispositivi si svuotano da soli.
 - **Grafica in stile iPhone** – titoli grandi, elenchi raggruppati, fogli dal basso, animazioni tra le schermate, tema chiaro e scuro.
 - **Telefono e computer** – menu in basso sul telefono, menu laterale e tabella sul computer. Tema chiaro e scuro.
 
@@ -88,6 +89,7 @@ firestore.rules          regole di sicurezza (chi può fare cosa)
 firestore.indexes.json   indici per i filtri dello storico movimenti
 scripts/
   abilita-utente.sh      abilita o disattiva una persona
+  azzera-dati.py         conta o cancella tutti i dati (con copia di sicurezza)
 docs/                    immagini di questo README
 public/                  l'app pubblicata
   index.html             pagina unica + versione di Firebase (import map)
@@ -137,3 +139,14 @@ Per togliere l'accesso: `bash scripts/abilita-utente.sh email@esempio.it "Nome" 
 ---
 
 <p align="center">Fatta per la bottega di Gabriele e Viviana 🧺</p>
+
+## Cancellare tutti i dati
+
+Dall'app: *Altro → Cancella tutti i dati* (due conferme). Oppure da Google Cloud Shell, nella cartella del progetto:
+
+```bash
+python3 scripts/azzera-dati.py            # mostra solo quanti dati ci sono
+python3 scripts/azzera-dati.py --cancella # salva una copia JSON e cancella tutto
+```
+
+Gli account in *utenti* non vengono toccati.
