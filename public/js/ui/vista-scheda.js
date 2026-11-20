@@ -11,7 +11,7 @@ import { registraMovimento, rettificaA, ascoltaUltimiMovimenti } from '../serviz
 import { storicoModifiche, storicoPrezzi } from '../servizi/storici.js';
 import { eliminaFoto, leggiFoto, salvaFoto } from '../servizi/foto.js';
 import { euro, firma } from '../util/formato.js';
-import { formattaDelta, formattaQuantita, prezzoPer, UNITA } from '../util/unita.js';
+import { formattaDelta, formattaQuantita, perUnita, UNITA } from '../util/unita.js';
 import { sottoScorta } from './vista-elenco.js';
 
 export function mostraScheda(contenitore, { id, naviga }) {
@@ -47,11 +47,11 @@ export function mostraScheda(contenitore, { id, naviga }) {
   const schedeStorico = h('div', { class: 'schede-tipo', role: 'tablist' });
 
   riempi(sezione,
-    h('header', { class: 'scheda-testa' },
-      h('button', { class: 'pulsante-icona', 'aria-label': 'Indietro', onclick: () => history.length > 1 ? history.back() : naviga('#/prodotti') },
-        icona('indietro')),
+    h('header', { class: 'scheda-testa con-indietro' },
+      h('button', { class: 'pulsante-indietro', onclick: () => history.length > 1 ? history.back() : naviga('#/prodotti') },
+        icona('indietro'), 'Indietro'),
       titolo,
-      h('a', { class: 'pulsante secondario', href: `#/prodotto/${id}/modifica` }, icona('modifica'), h('span', { class: 'solo-largo' }, 'Modifica')),
+      h('a', { class: 'pulsante secondario', href: `#/prodotto/${id}/modifica` }, 'Modifica'),
     ),
     etichettaArchiviato,
     h('div', { class: 'scheda-griglia' },
@@ -88,7 +88,14 @@ export function mostraScheda(contenitore, { id, naviga }) {
     titolo.textContent = p.nome;
     document.title = `${p.nome} — Bottega`;
     etichettaArchiviato.hidden = !p.archiviato;
-    valoreQuantita.textContent = formattaQuantita(p.quantita, p.unita);
+    const testoQuantita = formattaQuantita(p.quantita, p.unita);
+    if (valoreQuantita.textContent && valoreQuantita.textContent !== testoQuantita) {
+      // Il numero "rimbalza" quando cambia, come un contatore iOS.
+      valoreQuantita.classList.remove('rimbalzo');
+      void valoreQuantita.offsetWidth;
+      valoreQuantita.classList.add('rimbalzo');
+    }
+    valoreQuantita.textContent = testoQuantita;
     valoreQuantita.classList.toggle('negativa', p.quantita < 0);
     riempi(meno, '−', formattaQuantita(p.passo, p.unita, false));
     riempi(piu, '+', formattaQuantita(p.passo, p.unita, false));
@@ -103,10 +110,13 @@ export function mostraScheda(contenitore, { id, naviga }) {
 
     const riga = (nome, valore) => [h('dt', {}, nome), h('dd', {}, valore)];
     riempi(dettagli,
-      riga('Prezzo di vendita', `${euro(p.prezzoVendita)} ${prezzoPer(p.unita)}`),
-      riga('Prezzo di acquisto', p.prezzoAcquisto != null ? `${euro(p.prezzoAcquisto)} ${prezzoPer(p.unita)}` : '—'),
+      riga('Prezzo di vendita', p.prezzoVendita > 0
+        ? `${euro(p.prezzoVendita)}${perUnita(p.unita)}`
+        : h('a', { class: 'da-impostare', href: `#/prodotto/${id}/modifica` }, 'Da impostare')),
+      riga('Prezzo di acquisto', p.prezzoAcquisto != null ? `${euro(p.prezzoAcquisto)}${perUnita(p.unita)}` : '—'),
       riga('Categoria', p.categoria || '—'),
       riga('Codice a barre', p.ean || '—'),
+      p.codiceArticolo && riga('Codice articolo', p.codiceArticolo),
       riga('Unità', u?.etichetta ?? p.unita),
       riga('Scorta minima', p.sogliaMinima ? formattaQuantita(p.sogliaMinima, p.unita) : 'nessun avviso'),
       riga('Fornitore', p.fornitore || '—'),

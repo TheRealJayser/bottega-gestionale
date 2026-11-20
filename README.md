@@ -25,7 +25,8 @@
 - **Foto dei prodotti** – scattate al momento o scelte dalla galleria, compresse dall'app.
 - **Due persone insieme** – se Gabriele e Viviana scaricano lo stesso prodotto nello stesso istante, contano entrambe le operazioni.
 - **Senza rete** – le operazioni restano sul dispositivo e partono da sole quando la connessione torna; in alto si vede quante sono in attesa.
-- **Import ed export** – importazione da CSV o Excel, export del magazzino in CSV ed Excel, **backup completo** con foto e movimenti.
+- **Import ed export** – importazione direttamente dal **file Excel dell'inventario** (`ean · codice · descrizione · pezzi · costo un · costo tot`) o da CSV, con righe doppie unite e ricarico per i prezzi di vendita; export in CSV ed Excel, **backup completo** con foto e movimenti.
+- **Grafica in stile iPhone** – titoli grandi, elenchi raggruppati, fogli dal basso, animazioni tra le schermate, tema chiaro e scuro.
 - **Telefono e computer** – menu in basso sul telefono, menu laterale e tabella sul computer. Tema chiaro e scuro.
 
 Le novità di ogni aggiornamento sono in [CHANGELOG.md](CHANGELOG.md) e nelle [Release](../../releases).

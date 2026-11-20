@@ -54,13 +54,14 @@ service cloud.firestore {
           'fornitore', 'note', 'haFoto', 'archiviato', 'ultimoMovimento',
           'creatoDa', 'creatoIl', 'modificatoDa', 'modificatoIl'])
         && d.keys().hasOnly([
-          'nome', 'nomeRicerca', 'ean', 'categoria', 'prezzoVendita',
+          'nome', 'nomeRicerca', 'ean', 'codiceArticolo', 'categoria', 'prezzoVendita',
           'prezzoAcquisto', 'unita', 'quantita', 'sogliaMinima', 'passo',
           'fornitore', 'note', 'haFoto', 'archiviato', 'ultimoMovimento',
           'creatoDa', 'creatoIl', 'modificatoDa', 'modificatoIl'])
         && d.nome is string && d.nome.size() > 0 && d.nome.size() <= 200
         && testo(d.nomeRicerca, 400)
         && codiceValido(d.ean)
+        && (!('codiceArticolo' in d) || testo(d.codiceArticolo, 40))
         && testo(d.categoria, 100)
         && d.prezzoVendita is int && d.prezzoVendita >= 0
         && (d.prezzoAcquisto == null || (d.prezzoAcquisto is int && d.prezzoAcquisto >= 0))

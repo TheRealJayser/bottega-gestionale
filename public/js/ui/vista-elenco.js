@@ -7,8 +7,8 @@ import { h, riempi, rallenta, schermoLargo, conferma } from './dom.js';
 import { icona } from './icone.js';
 import * as prodotti from '../servizi/prodotti.js';
 import { euro } from '../util/formato.js';
-import { formattaQuantita, prezzoPer } from '../util/unita.js';
-import { parole } from '../util/testo.js';
+import { formattaQuantita, perUnita } from '../util/unita.js';
+import { normalizza, parole } from '../util/testo.js';
 import { pulisciCodice, sembraCodice } from '../util/codici.js';
 
 const CHIAVE_FILTRI = 'bottega.filtriElenco';
@@ -38,7 +38,8 @@ export function filtraProdotti(lista, { testo, categoria, ordine }) {
   let r = lista;
   if (categoria) r = r.filter((p) => p.categoria === categoria);
   if (cercate.length) {
-    r = r.filter((p) => cercate.every((w) => p.nomeRicerca?.includes(w) || p.ean?.startsWith(w)));
+    r = r.filter((p) => cercate.every((w) => p.nomeRicerca?.includes(w) || p.ean?.startsWith(w)
+      || normalizza(p.codiceArticolo).startsWith(w)));
   }
   return [...r].sort(ORDINAMENTI[ordine]?.confronta ?? ORDINAMENTI.nome.confronta);
 }
@@ -81,10 +82,13 @@ export function mostraElenco(contenitore, { naviga }) {
   });
 
   const conteggio = h('p', { class: 'conteggio' });
-  const lista = h('div', { class: 'tabella-prodotti', role: 'list' });
+  // Le prime righe entrano a cascata solo all'apertura, non a ogni ricerca.
+  const lista = h('div', { class: 'tabella-prodotti appena-aperta', role: 'list' });
+  setTimeout(() => lista.classList.remove('appena-aperta'), 900);
 
   riempi(contenitore,
     h('section', { class: 'vista vista-elenco' },
+      h('header', { class: 'scheda-testa' }, h('h1', {}, 'Magazzino')),
       h('div', { class: 'barra-strumenti' },
         h('div', { class: 'ricerca' },
           icona('cerca'),
@@ -165,8 +169,11 @@ export function mostraElenco(contenitore, { naviga }) {
         h('small', {}, [p.categoria, p.ean].filter(Boolean).join(' · ') || ' '),
       ),
       h('span', { class: 'riga-fornitore solo-largo' }, p.fornitore || '—'),
-      h('span', { class: 'riga-prezzo' },
-        euro(p.prezzoVendita), p.unita !== 'pz' && h('small', {}, ` ${prezzoPer(p.unita)}`)),
+      p.prezzoVendita > 0
+        ? h('span', { class: 'riga-prezzo' },
+          euro(p.prezzoVendita), p.unita !== 'pz' && h('small', {}, perUnita(p.unita)))
+        : h('span', { class: 'riga-prezzo da-impostare' }, 'Prezzo da impostare'),
+      h('span', { class: 'riga-freccia', 'aria-hidden': 'true' }, icona('avanti')),
       h('span', { class: `riga-quantita ${basso ? 'bassa' : ''} ${p.quantita < 0 ? 'negativa' : ''}` },
         basso && icona('avviso', 'piccola'),
         formattaQuantita(p.quantita, p.unita)),
@@ -205,7 +212,7 @@ export function mostraElenco(contenitore, { naviga }) {
     riempi(lista,
       h('div', { class: 'riga-intestazione solo-largo', 'aria-hidden': 'true' },
         h('span', {}), h('span', {}, 'Prodotto'), h('span', {}, 'Fornitore'),
-        h('span', {}, 'Prezzo'), h('span', {}, 'Quantità')),
+        h('span', {}, 'Prezzo'), h('span', {}, 'Quantità'), h('span', {})),
       visibili.map(riga),
       risultati.length === 0 && h('div', { class: 'vuoto' }, h('p', {}, 'Nessun prodotto corrisponde alla ricerca.')),
       risultati.length > visibili.length && h('button', {

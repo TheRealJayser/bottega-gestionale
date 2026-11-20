@@ -10,9 +10,10 @@ import { profiloCorrente } from '../servizi/utenti.js';
 import * as prodotti from '../servizi/prodotti.js';
 import { scrittureInAttesa } from '../servizi/scritture.js';
 import {
-  analizzaFile, backupCompleto, eseguiImportazione, esportaCsv, esportaExcel, ultimoBackup,
+  analizzaFile, backupCompleto, eseguiImportazione, esportaCsv, esportaExcel, prezzoConRicarico, ultimoBackup,
 } from '../servizi/importa-esporta.js';
-import { data } from '../util/formato.js';
+import { data, euro } from '../util/formato.js';
+import { formattaQuantita } from '../util/unita.js';
 import { VERSIONE_APP, promptInstallazione } from './installazione.js';
 
 export function mostraAltro(contenitore) {
@@ -51,20 +52,69 @@ export function mostraAltro(contenitore) {
       avviso(err.message, 'errore');
       return;
     }
-    const { nuovi, aggiornati, uguali, errori } = analisi;
+    const { nuovi, aggiornati, uguali, errori, unite, saltate, senzaPrezzo } = analisi;
     const totale = nuovi.length + aggiornati.length;
+
+    // Ricarico per i prodotti nuovi senza prezzo di vendita (il file
+    // dell'inventario ha solo il costo).
+    const ricarico = h('input', {
+      type: 'text', inputmode: 'decimal', placeholder: 'es. 40', autocomplete: 'off',
+      value: localStorage.getItem('bottega.ricaricoImport') ?? '',
+    });
+    const esempioRicarico = h('small', { class: 'aiuto' });
+    const leggiRicarico = () => {
+      const v = parseFloat(String(ricarico.value).replace(',', '.'));
+      return v > 0 && v < 1000 ? v : 0;
+    };
+    const conCosto = nuovi.find((n) => n.dati.prezzoVendita == null && n.dati.prezzoAcquisto != null);
+    const aggiornaEsempio = () => {
+      const r = leggiRicarico();
+      esempioRicarico.textContent = !r
+        ? 'Lascia vuoto per mettere i prezzi di vendita a mano: i prodotti compariranno come "Prezzo da impostare".'
+        : conCosto
+          ? `Esempio: ${conCosto.dati.nome} costa ${euro(conCosto.dati.prezzoAcquisto)} → in vendita a ${euro(prezzoConRicarico(conCosto.dati.prezzoAcquisto, r))} (arrotondato ai 5 centesimi).`
+          : '';
+    };
+    ricarico.addEventListener('input', aggiornaEsempio);
+    aggiornaEsempio();
+
+    const voce = (numero, testo, classe = '') => h('li', { class: classe },
+      h('span', {}, testo), h('strong', {}, numero));
+    const anteprima = [
+      ...nuovi.slice(0, 4).map((n) => h('li', {},
+        h('span', { class: 'etichetta-nuovo' }, 'Nuovo'),
+        h('span', { class: 'anteprima-nome' }, n.dati.nome),
+        h('span', { class: 'anteprima-dato' }, formattaQuantita(n.quantita, n.dati.unita ?? 'pz')))),
+      ...aggiornati.slice(0, 3).map((a) => h('li', {},
+        h('span', { class: 'etichetta-agg' }, 'Agg.'),
+        h('span', { class: 'anteprima-nome' }, a.nome),
+        h('span', { class: 'anteprima-dato' }, a.quantita !== undefined
+          ? `${formattaQuantita(a.prima, a.unita, false)} → ${formattaQuantita(a.quantita, a.unita)}`
+          : 'dati'))),
+    ];
+
     const scelta = await apriFinestra({
       titolo: 'Importazione',
       larga: true,
       corpo: [
+        h('p', { class: 'nota' }, file.name),
         h('ul', { class: 'riepilogo-import' },
-          h('li', {}, h('strong', {}, nuovi.length), ' prodotti nuovi'),
-          h('li', {}, h('strong', {}, aggiornati.length), ' prodotti da aggiornare'),
-          h('li', {}, h('strong', {}, uguali), ' già uguali (ignorati)'),
-          h('li', { class: errori.length ? 'errore' : '' }, h('strong', {}, errori.length), ' righe con errori (ignorate)'),
+          voce(nuovi.length, 'Prodotti nuovi'),
+          voce(aggiornati.length, 'Prodotti da aggiornare'),
+          voce(uguali, 'Già uguali (ignorati)'),
+          unite > 0 && voce(unite, 'Righe doppie unite (pezzi sommati)'),
+          saltate > 0 && voce(saltate, 'Righe vuote o di totale (saltate)'),
+          errori.length > 0 && voce(errori.length, 'Righe con errori (ignorate)', 'errore'),
         ),
+        anteprima.length > 0 && h('div', {},
+          h('p', { class: 'titoletto' }, 'Anteprima'),
+          h('ul', { class: 'anteprima-import' }, anteprima)),
+        senzaPrezzo > 0 && h('div', { class: 'campo riquadro-ricarico' },
+          h('label', {}, `Prezzo di vendita per ${senzaPrezzo} prodotti nuovi`),
+          h('div', { class: 'con-unita' }, h('span', { class: 'prefisso' }, 'Costo +'), ricarico, h('span', {}, '%')),
+          esempioRicarico),
         aggiornati.some((a) => a.quantita !== undefined) && h('p', { class: 'nota' },
-          'Le quantità diverse verranno corrette con una rettifica (registrata nello storico).'),
+          'Le quantità diverse verranno corrette con un conteggio (registrato nello storico).'),
         errori.length > 0 && h('details', {}, h('summary', {}, 'Vedi gli errori'),
           h('ul', { class: 'elenco-errori' }, errori.slice(0, 200).map((e) => h('li', {}, e)))),
         totale === 0 && h('p', {}, 'Non c\'è niente da importare.'),
@@ -77,6 +127,8 @@ export function mostraAltro(contenitore) {
         ],
     });
     if (scelta !== 'ok') return;
+    const percentuale = leggiRicarico();
+    if (senzaPrezzo > 0) localStorage.setItem('bottega.ricaricoImport', percentuale ? String(percentuale).replace('.', ',') : '');
 
     const barra = h('progress', { max: totale, value: 0 });
     const testo = h('p', {}, `0 di ${totale}`);
@@ -85,7 +137,7 @@ export function mostraAltro(contenitore) {
     const esito = await eseguiImportazione(analisi, (fatti) => {
       barra.value = fatti;
       testo.textContent = `${fatti} di ${totale}`;
-    });
+    }, { ricarico: percentuale });
     finestra.remove();
     avviso(
       esito.falliti
@@ -177,7 +229,9 @@ export function mostraAltro(contenitore) {
 
         h('div', { class: 'riquadro' },
           h('h2', {}, 'Importa prodotti'),
-          h('p', { class: 'nota' }, 'File CSV o Excel con le colonne: Nome, Codice, Categoria, Prezzo vendita, Prezzo acquisto, Quantità, Unità (pz/kg/l), Scorta minima, Passo, Fornitore, Note. Bastano Nome (o Codice) e le colonne che vuoi aggiornare. I prodotti già presenti vengono riconosciuti dal codice a barre.'),
+          h('p', { class: 'nota' }, 'Va bene direttamente il file Excel dell\'inventario, con le colonne ean · codice · descrizione · pezzi · costo un · costo tot. I prodotti già presenti vengono riconosciuti dal codice EAN e i loro pezzi vengono aggiornati; quelli nuovi vengono inseriti.'),
+          h('details', { class: 'nota' }, h('summary', {}, 'Altre colonne riconosciute'),
+            h('p', {}, 'Nome, Codice articolo, Categoria, Prezzo vendita, Prezzo acquisto, Quantità, Unità (pz/kg/l), Scorta minima, Passo, Fornitore, Note. L\'ordine non conta e bastano Descrizione (o EAN) più le colonne da aggiornare.')),
           inputFile,
           h('div', { class: 'riga-pulsanti' },
             h('button', { class: 'pulsante primario', onclick: () => inputFile.click() }, icona('carica'), 'Scegli file'),

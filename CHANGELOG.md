@@ -2,6 +2,31 @@
 
 Tutti gli aggiornamenti del Gestionale Bottega, dal più recente.
 
+## Versione 1.1.0 — 20 novembre 2026
+
+### Nuovo
+- **Import del file Excel dell'inventario** così com'è, con le colonne `ean · codice · descrizione · pezzi · costo un · costo tot`:
+  - i prodotti già in magazzino vengono riconosciuti dall'EAN e i loro pezzi aggiornati con un conteggio (registrato nello storico); quelli nuovi vengono inseriti;
+  - se lo stesso EAN compare in più righe, i pezzi vengono **sommati**;
+  - le righe vuote o di totale vengono saltate;
+  - il *costo un* diventa il prezzo di acquisto (arrotondato al centesimo); se manca, si calcola da *costo tot* ÷ *pezzi*;
+  - per i prodotti nuovi, che nel file non hanno il prezzo di vendita, si può indicare un **ricarico in %** sul costo (arrotondato ai 5 centesimi), oppure lasciarli "Prezzo da impostare";
+  - prima di importare compare un riepilogo con l'anteprima dei prodotti.
+- **Codice articolo** del fornitore (la colonna "codice" dell'inventario): nella scheda, nel modulo, nella ricerca e negli export.
+- I prodotti senza prezzo di vendita mostrano **"Prezzo da impostare"** invece di 0,00 €.
+
+### Grafica nuova in stile iPhone
+- Colori, caratteri e materiali traslucidi come in iOS, con tema chiaro e scuro.
+- Titoli grandi che si rimpiccioliscono nella barra in alto scorrendo.
+- Elenchi raggruppati con freccia, interruttori iOS, controlli segmentati.
+- Finestre come **fogli che salgono dal basso** (si chiudono anche trascinandole giù); sul computer finestre centrate.
+- **Animazioni**: passaggio tra le schermate (avanti e indietro come su iPhone), quantità che "rimbalza" quando cambia, notifiche dall'alto, pulsanti "a molla".
+- Sul computer: barra laterale come su iPad e Mac.
+- Chi ha attivato "Riduci movimento" sul telefono non vede le animazioni.
+
+### Da sapere
+- Le **regole del database sono cambiate** (per il codice articolo): pubblicare con `firebase deploy` (tutto), non solo `--only hosting`.
+
 ## Versione 1.0.1 — 20 novembre 2026
 
 ### Corretto

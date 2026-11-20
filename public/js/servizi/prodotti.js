@@ -27,7 +27,7 @@ const CHIAVE_SYNC = 'ultimaSincronizzazione';
 
 /** Campi dell'anagrafica che una persona può modificare. */
 export const CAMPI_ANAGRAFICA = [
-  'nome', 'ean', 'categoria', 'prezzoVendita', 'prezzoAcquisto',
+  'nome', 'ean', 'codiceArticolo', 'categoria', 'prezzoVendita', 'prezzoAcquisto',
   'unita', 'sogliaMinima', 'passo', 'fornitore', 'note',
 ];
 
@@ -239,11 +239,17 @@ export function daRiordinare() {
 
 // ---------- Scritture ----------
 
-/** Pulisce e completa i dati inseriti nel modulo. */
-function preparaDati(d) {
+/**
+ * Pulisce e completa i dati inseriti nel modulo.
+ * Il codice articolo del fornitore è facoltativo: si scrive solo se c'è
+ * (o se c'era prima e va svuotato), così i prodotti senza non lo hanno.
+ */
+function preparaDati(d, attuale = null) {
   const nome = String(d.nome ?? '').trim();
   const categoria = String(d.categoria ?? '').trim();
+  const codiceArticolo = String(d.codiceArticolo ?? '').trim().slice(0, 40);
   return {
+    ...((codiceArticolo || attuale?.codiceArticolo) ? { codiceArticolo } : {}),
     nome,
     nomeRicerca: normalizza(`${nome} ${categoria}`),
     ean: d.ean ? String(d.ean) : null,
@@ -320,7 +326,7 @@ export function aggiorna(id, nuoviDati) {
   const attuale = prodotti.get(id);
   if (!attuale) throw new Error('Prodotto non trovato');
   const firma = firmaUtente();
-  const base = preparaDati({ ...attuale, ...nuoviDati });
+  const base = preparaDati({ ...attuale, ...nuoviDati }, attuale);
 
   const campi = CAMPI_ANAGRAFICA
     .filter((c) => (base[c] ?? null) !== (attuale[c] ?? null))

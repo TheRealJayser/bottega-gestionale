@@ -25,6 +25,7 @@ export function mostraModulo(contenitore, { id, ean, naviga }) {
   const nome = h('input', { type: 'text', maxlength: 200, required: true, value: v.nome ?? '', autocomplete: 'off', autocapitalize: 'sentences' });
   const codice = h('input', { type: 'text', maxlength: 40, value: v.ean ?? '', inputmode: 'numeric', autocomplete: 'off', placeholder: 'Scansiona o scrivi' });
   const avvisoCodice = h('small', { class: 'aiuto' });
+  const codiceArticolo = h('input', { type: 'text', maxlength: 40, value: v.codiceArticolo ?? '', autocomplete: 'off', placeholder: 'Facoltativo' });
   const categoria = h('input', { type: 'text', maxlength: 100, value: v.categoria ?? '', list: 'elenco-categorie', autocomplete: 'off', autocapitalize: 'sentences' });
   const unita = h('select', {}, Object.entries(UNITA).map(([k, u]) => h('option', { value: k, selected: k === v.unita }, u.etichetta)));
   const prezzoVendita = h('input', { type: 'text', inputmode: 'decimal', value: euroSemplice(v.prezzoVendita), placeholder: '0,00', autocomplete: 'off' });
@@ -119,6 +120,7 @@ export function mostraModulo(contenitore, { id, ean, naviga }) {
     const dati = {
       nome: nome.value.trim(),
       ean: pulisciCodice(codice.value) || null,
+      codiceArticolo: codiceArticolo.value.trim(),
       categoria: categoria.value.trim(),
       unita: u,
       prezzoVendita: leggiEuro(prezzoVendita.value),
@@ -169,9 +171,9 @@ export function mostraModulo(contenitore, { id, ean, naviga }) {
   // ---------- Disegno ----------
   riempi(contenitore,
     h('section', { class: 'vista vista-modulo' },
-      h('header', { class: 'scheda-testa' },
-        h('button', { class: 'pulsante-icona', 'aria-label': 'Indietro', onclick: () => history.back() }, icona('indietro')),
-        h('h1', {}, nuovo ? 'Nuovo prodotto' : `Modifica: ${esistente.nome}`),
+      h('header', { class: 'scheda-testa con-indietro' },
+        h('button', { type: 'button', class: 'pulsante-indietro', onclick: () => history.back() }, icona('indietro'), 'Annulla'),
+        h('h1', {}, nuovo ? 'Nuovo prodotto' : 'Modifica prodotto'),
       ),
       h('datalist', { id: 'elenco-categorie' }, prodotti.categorie().map((c) => h('option', { value: c }))),
       h('datalist', { id: 'elenco-fornitori' }, prodotti.fornitori().map((c) => h('option', { value: c }))),
@@ -186,6 +188,7 @@ export function mostraModulo(contenitore, { id, ean, naviga }) {
             avvisoCodice,
             h('small', { class: 'errore-campo' }),
           ),
+          campo('Codice articolo', codiceArticolo, { aiuto: 'Il codice del fornitore o del grossista (colonna "codice" dell\'inventario).' }),
           campo('Categoria', categoria),
           campo('Unità di misura', unita, {
             aiuto: unita.disabled ? 'Per cambiare unità la quantità deve essere zero (fai prima un conteggio a 0).' : 'Affettati, frutta e verdura: Chilogrammi.',

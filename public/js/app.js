@@ -12,7 +12,7 @@
 //    #/altro                     account, import/export, backup
 // =====================================================================
 
-import { h, riempi, avviso, conferma } from './ui/dom.js';
+import { h, riempi, avviso, conferma, movimentoRidotto } from './ui/dom.js';
 import { icona } from './ui/icone.js';
 import { registraServiceWorker } from './ui/installazione.js';
 import { avviaLettoreTastiera, impostaGestoreCodici } from './ui/lettore-tastiera.js';
@@ -35,6 +35,11 @@ let pulisciVista = null;   // funzione di chiusura della schermata attuale
 let elementiNav = [];
 let badgeRiordino = null;
 let indicatoreStato = null;
+let barraAlta = null;
+let titoloBarra = null;
+let osservatoreTitolo = null;
+let profonditaPrecedente = null;
+let sezionePrecedente = null;
 
 // ---------------------------------------------------------------------
 //  Navigazione
@@ -106,14 +111,62 @@ function instrada() {
   }
 
   elementiNav.forEach((a) => a.toggleAttribute('aria-current', a.dataset.sezione === sezione));
-  window.scrollTo(0, 0);
-  try {
-    pulisciVista = disegna() ?? null;
-  } catch (err) {
-    console.error(err);
-    riempi(contenuto, h('div', { class: 'vuoto' }, h('p', {}, 'Si è verificato un errore: ' + err.message),
-      h('a', { href: '#/prodotti' }, 'Torna all\'elenco')));
+
+  // Direzione dell'animazione, come su iPhone: entrando in una scheda la
+  // schermata nuova arriva da destra, tornando indietro esce a destra,
+  // cambiando sezione dal menu in basso c'è una dissolvenza.
+  const profondita = parti[0] === 'prodotto' ? (parti[2] === 'modifica' ? 2 : 1) : parti[0] === 'nuovo' ? 1 : 0;
+  let direzione = 'dissolvi';
+  if (profonditaPrecedente == null) direzione = null;
+  else if (profondita > profonditaPrecedente) direzione = 'avanti';
+  else if (profondita < profonditaPrecedente && sezione === sezionePrecedente) direzione = 'indietro';
+  profonditaPrecedente = profondita;
+  sezionePrecedente = sezione;
+
+  const mostra = () => {
+    window.scrollTo(0, 0);
+    try {
+      pulisciVista = disegna() ?? null;
+    } catch (err) {
+      console.error(err);
+      riempi(contenuto, h('div', { class: 'vuoto' }, h('p', {}, 'Si è verificato un errore: ' + err.message),
+        h('a', { href: '#/prodotti' }, 'Torna all\'elenco')));
+    }
+    osservaTitolo();
+  };
+
+  if (!direzione || movimentoRidotto()) {
+    mostra();
+  } else if (document.startViewTransition) {
+    document.documentElement.dataset.direzione = direzione;
+    const transizione = document.startViewTransition(mostra);
+    transizione.finished.finally(() => { delete document.documentElement.dataset.direzione; });
+  } else {
+    mostra();
+    contenuto.querySelector('.vista')?.classList.add(`entra-${direzione}`);
   }
+}
+
+/**
+ * Titolo grande della schermata: quando scorrendo passa sotto la barra in
+ * alto, il titolo compare piccolo al centro della barra (come su iPhone).
+ */
+function osservaTitolo() {
+  osservatoreTitolo?.disconnect();
+  barraAlta?.classList.remove('con-titolo');
+  const titolo = contenuto?.querySelector('.scheda-testa h1');
+  if (!titolo || !barraAlta) return;
+  titoloBarra.textContent = titolo.textContent;
+  osservatoreTitolo = new IntersectionObserver(([voce]) => {
+    titoloBarra.textContent = titolo.textContent;
+    barraAlta.classList.toggle('con-titolo', !voce.isIntersecting && voce.boundingClientRect.top < 80);
+  }, { rootMargin: `-${barraAlta.offsetHeight}px 0px 0px 0px` });
+  osservatoreTitolo.observe(titolo);
+}
+
+/** Barra in alto traslucida e con la riga sottile solo quando si scorre. */
+function aggiornaBarraScorrimento() {
+  barraAlta?.classList.toggle('scrollata', window.scrollY > 2);
 }
 
 // ---------------------------------------------------------------------
@@ -122,8 +175,17 @@ function instrada() {
 
 function montaStruttura() {
   const voce = (sezione, indirizzo, nomeIcona, testo, extra) => {
-    const a = h('a', { href: indirizzo, class: `nav-voce nav-${sezione}`, dataset: { sezione } },
-      icona(nomeIcona), h('span', {}, testo), extra);
+    const a = h('a', {
+      href: indirizzo, class: `nav-voce nav-${sezione}`, dataset: { sezione },
+      // Piccolo "salto" dell'icona al tocco, come nella tab bar di iOS.
+      onclick: () => {
+        a.classList.remove('saltella');
+        void a.offsetWidth;
+        a.classList.add('saltella');
+        // Toccare di nuovo la sezione attiva riporta in cima.
+        if (a.hasAttribute('aria-current') && location.hash === indirizzo) window.scrollTo({ top: 0, behavior: 'smooth' });
+      },
+    }, icona(nomeIcona), h('span', {}, testo), extra);
     elementiNav.push(a);
     return a;
   };
@@ -132,13 +194,21 @@ function montaStruttura() {
   indicatoreStato = h('span', { class: 'stato-rete', role: 'status' });
   contenuto = h('main', { id: 'contenuto', tabindex: '-1' });
 
+  const nomeUtente = profiloCorrente()?.nome ?? '';
+  titoloBarra = h('span', { class: 'titolo-barra', 'aria-hidden': 'true' });
+  barraAlta = h('header', { class: 'barra-alta' },
+    h('a', { href: '#/prodotti', class: 'marchio' }, h('img', { src: 'icone/icona.svg', alt: '', width: 28, height: 28 }), h('span', {}, 'Bottega')),
+    titoloBarra,
+    h('div', { class: 'lato-destro' },
+      indicatoreStato,
+      h('a', { href: '#/altro', class: 'utente-attivo', title: nomeUtente, 'aria-label': `Account di ${nomeUtente}` },
+        nomeUtente.trim().charAt(0).toUpperCase()),
+    ),
+  );
+
   radice.classList.add('con-struttura');
   riempi(radice,
-    h('header', { class: 'barra-alta' },
-      h('a', { href: '#/prodotti', class: 'marchio' }, h('img', { src: 'icone/icona.svg', alt: '', width: 28, height: 28 }), 'Bottega'),
-      indicatoreStato,
-      h('span', { class: 'utente-attivo' }, profiloCorrente()?.nome ?? ''),
-    ),
+    barraAlta,
     h('nav', { class: 'navigazione', 'aria-label': 'Menu principale' },
       voce('prodotti', '#/prodotti', 'magazzino', 'Magazzino'),
       voce('riordino', '#/riordino', 'riordino', 'Riordino', badgeRiordino),
@@ -177,6 +247,7 @@ function aggiornaIndicatori() {
 registraServiceWorker();
 avviaLettoreTastiera();
 window.addEventListener('hashchange', instrada);
+window.addEventListener('scroll', aggiornaBarraScorrimento, { passive: true });
 window.addEventListener('online', aggiornaIndicatori);
 window.addEventListener('offline', aggiornaIndicatori);
 prodotti.suCambio(aggiornaIndicatori);

@@ -64,3 +64,8 @@ export function leggiQuantita(testo, unita) {
 export function prezzoPer(unita) {
   return `€/${infoUnita(unita).simbolo}`;
 }
+
+/** Suffisso dopo un prezzo già con "€": "/kg", "/l"; nulla per i pezzi. */
+export function perUnita(unita) {
+  return unita === 'pz' ? '' : `/${infoUnita(unita).simbolo}`;
+}

@@ -28,6 +28,7 @@ export function rigaMovimento(m, { mostraProdotto = false } = {}) {
 const NOMI_CAMPI = {
   nome: 'Nome',
   ean: 'Codice a barre',
+  codiceArticolo: 'Codice articolo',
   categoria: 'Categoria',
   prezzoVendita: 'Prezzo di vendita',
   prezzoAcquisto: 'Prezzo di acquisto',
