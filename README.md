@@ -33,10 +33,11 @@ Quando cambi i file dell'app, aumenta la versione in `public/sw.js` (`VERSIONE`)
 
 ## Aggiungere un utente
 
-1. Console Firebase → Authentication → Aggiungi utente (email + password provvisoria).
-2. Firestore → raccolta `utenti` → nuovo documento con ID = UID dell'utente e campi `nome` (string), `email` (string), `attivo` (boolean true), `creatoIl` (timestamp).
+1. Console Firebase → Authentication → Utenti → Aggiungi utente (email + password provvisoria).
+2. Da Google Cloud Shell, nella cartella del progetto:
+   `bash scripts/abilita-utente.sh email@esempio.it "Nome"`
 
-Per togliere l'accesso: `attivo` = false (lo storico resta).
+Per togliere l'accesso: `bash scripts/abilita-utente.sh email@esempio.it "Nome" disattiva` (lo storico resta).
 
 ## Scelte importanti
 
