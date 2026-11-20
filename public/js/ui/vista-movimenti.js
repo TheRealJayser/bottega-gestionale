@@ -24,6 +24,16 @@ export function mostraMovimenti(contenitore, { parametri }) {
   const selPersona = h('select', { 'aria-label': 'Persona' }, h('option', { value: '' }, 'Tutte le persone'));
   const da = h('input', { type: 'date', 'aria-label': 'Dal giorno' });
   const a = h('input', { type: 'date', 'aria-label': 'Al giorno' });
+
+  // Su iPhone un campo data vuoto non mostra nulla: aggiungiamo una
+  // scritta "Scegli…" che sparisce quando c'è una data.
+  // (Gli altri browser mostrano già "gg/mm/aaaa": lì la scritta non serve.)
+  const iPhone = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const campoData = (input) => h('span', { class: 'campo-data' }, input,
+    iPhone && h('span', { class: 'segnaposto', 'aria-hidden': 'true' }, 'Scegli…'));
+  const aggiornaSegnaposti = () => [da, a].forEach((c) => c.parentElement?.classList.toggle('ha-valore', !!c.value));
+  [da, a].forEach((c) => { c.addEventListener('input', aggiornaSegnaposti); c.addEventListener('change', aggiornaSegnaposti); });
   const elenco = h('ul', { class: 'elenco-storico grande' });
   const piede = h('div', { class: 'piede-elenco' });
   const riepilogo = h('p', { class: 'conteggio' });
@@ -53,6 +63,7 @@ export function mostraMovimenti(contenitore, { parametri }) {
       const oggi = new Date();
       a.value = inTestoData(oggi);
       da.value = inTestoData(new Date(oggi.getTime() - (giorni - 1) * 86_400_000));
+      aggiornaSegnaposti();
       cerca();
     },
   }, testo);
@@ -110,12 +121,12 @@ export function mostraMovimenti(contenitore, { parametri }) {
         selProdotto,
         selPersona,
         h('div', { class: 'periodo' },
-          h('label', {}, 'Dal ', da),
-          h('label', {}, 'al ', a),
+          h('label', {}, h('span', {}, 'Dal'), campoData(da)),
+          h('label', {}, h('span', {}, 'Al'), campoData(a)),
         ),
         h('div', { class: 'scorciatoie' },
           scorciatoia('Oggi', 1), scorciatoia('7 giorni', 7), scorciatoia('30 giorni', 30),
-          h('button', { type: 'button', class: 'pulsante-link', onclick: () => { da.value = ''; a.value = ''; cerca(); } }, 'Tutto il periodo'),
+          h('button', { type: 'button', class: 'pulsante-link', onclick: () => { da.value = ''; a.value = ''; aggiornaSegnaposti(); cerca(); } }, 'Tutto il periodo'),
         ),
       ),
       h('div', { class: 'riga-azioni' }, riepilogo,

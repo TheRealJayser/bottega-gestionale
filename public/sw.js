@@ -9,7 +9,7 @@
 //  - Le chiamate al database NON passano di qui: le gestisce Firestore.
 // =====================================================================
 
-const VERSIONE = 'bottega-1.0.0';
+const VERSIONE = 'bottega-1.0.1';
 
 const FILE_APP = [
   './',
