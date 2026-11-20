@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "movimenti",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "idProdotto", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movimenti",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "utente.uid", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "movimenti",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "idProdotto", "order": "ASCENDING" },
+        { "fieldPath": "utente.uid", "order": "ASCENDING" },
+        { "fieldPath": "data", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

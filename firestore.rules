@@ -1,0 +1,215 @@
+rules_version = '2';
+
+// =====================================================================
+//  REGOLE DI SICUREZZA — Gestionale Bottega
+// ---------------------------------------------------------------------
+//  Principi:
+//  1. Solo gli utenti presenti in "utenti" con attivo == true possono
+//     leggere o scrivere qualcosa.
+//  2. "Chi" e "quando" non si possono falsificare: l'utente scritto nei
+//     documenti deve essere chi fa la richiesta, e la data deve essere
+//     l'ora del server.
+//  3. La quantità di un prodotto può cambiare SOLO insieme a un
+//     movimento di magazzino con lo stesso delta (stessa scrittura).
+//  4. Gli storici (movimenti, prezzi, modifiche) si possono solo creare:
+//     mai modificare né cancellare.
+//  5. I prodotti non si cancellano: si archiviano.
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Funzioni di supporto ----------
+
+    function profilo() {
+      return get(/databases/$(database)/documents/utenti/$(request.auth.uid)).data;
+    }
+
+    // Utente con accesso eseguito e registrato come attivo.
+    function autorizzato() {
+      return request.auth != null && profilo().attivo == true;
+    }
+
+    // La "firma" {uid, nome} corrisponde a chi sta scrivendo.
+    function firmaValida(f) {
+      return f is map
+        && f.keys().hasOnly(['uid', 'nome'])
+        && f.uid == request.auth.uid
+        && f.nome == profilo().nome;
+    }
+
+    function testo(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    // Codice a barre: cifre, lettere e trattino (diventa ID di documento).
+    function codiceValido(v) {
+      return v == null || (v is string && v.matches('^[0-9A-Za-z-]{1,40}$'));
+    }
+
+    function campiProdottoValidi(d) {
+      return d.keys().hasAll([
+          'nome', 'nomeRicerca', 'ean', 'categoria', 'prezzoVendita',
+          'prezzoAcquisto', 'unita', 'quantita', 'sogliaMinima', 'passo',
+          'fornitore', 'note', 'haFoto', 'archiviato', 'ultimoMovimento',
+          'creatoDa', 'creatoIl', 'modificatoDa', 'modificatoIl'])
+        && d.keys().hasOnly([
+          'nome', 'nomeRicerca', 'ean', 'categoria', 'prezzoVendita',
+          'prezzoAcquisto', 'unita', 'quantita', 'sogliaMinima', 'passo',
+          'fornitore', 'note', 'haFoto', 'archiviato', 'ultimoMovimento',
+          'creatoDa', 'creatoIl', 'modificatoDa', 'modificatoIl'])
+        && d.nome is string && d.nome.size() > 0 && d.nome.size() <= 200
+        && testo(d.nomeRicerca, 400)
+        && codiceValido(d.ean)
+        && testo(d.categoria, 100)
+        && d.prezzoVendita is int && d.prezzoVendita >= 0
+        && (d.prezzoAcquisto == null || (d.prezzoAcquisto is int && d.prezzoAcquisto >= 0))
+        && d.unita in ['pz', 'kg', 'l']
+        && d.quantita is int
+        && d.sogliaMinima is int && d.sogliaMinima >= 0
+        && d.passo is int && d.passo > 0
+        && testo(d.fornitore, 200)
+        && testo(d.note, 2000)
+        && d.haFoto is bool
+        && d.archiviato is bool
+        && (d.ultimoMovimento == null || d.ultimoMovimento is string)
+        && firmaValida(d.modificatoDa)
+        && d.modificatoIl == request.time;
+    }
+
+    // Se il codice a barre è nuovo o cambiato, deve essere "prenotato"
+    // in /codici/{ean} per questo stesso prodotto (garantisce l'unicità).
+    function codiceRiservato(idProdotto, d) {
+      return d.ean == null
+        || (resource != null && resource.data.ean == d.ean)
+        || getAfter(/databases/$(database)/documents/codici/$(d.ean)).data.idProdotto == idProdotto;
+    }
+
+    // La quantità cambia solo con un movimento nuovo dello stesso valore.
+    function quantitaCoerente() {
+      let prima = resource == null ? 0 : resource.data.quantita;
+      let movPrima = resource == null ? null : resource.data.ultimoMovimento;
+      let d = request.resource.data;
+      return d.ultimoMovimento == movPrima
+        ? d.quantita == prima
+        : (d.ultimoMovimento is string
+           && getAfter(/databases/$(database)/documents/movimenti/$(d.ultimoMovimento)).data.delta == d.quantita - prima);
+    }
+
+    // ---------- Utenti ----------
+    // Si gestiscono solo dalla console Firebase.
+    match /utenti/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || autorizzato());
+      allow write: if false;
+    }
+
+    // ---------- Prodotti ----------
+    match /prodotti/{idProdotto} {
+      allow read: if autorizzato();
+
+      allow create: if autorizzato()
+        && campiProdottoValidi(request.resource.data)
+        && firmaValida(request.resource.data.creatoDa)
+        && request.resource.data.creatoIl == request.time
+        && codiceRiservato(idProdotto, request.resource.data)
+        && quantitaCoerente();
+
+      allow update: if autorizzato()
+        && campiProdottoValidi(request.resource.data)
+        && request.resource.data.creatoDa == resource.data.creatoDa
+        && request.resource.data.creatoIl == resource.data.creatoIl
+        && codiceRiservato(idProdotto, request.resource.data)
+        && quantitaCoerente();
+
+      allow delete: if false;
+
+      // Storico dei prezzi: solo creazione.
+      match /storicoPrezzi/{idVariazione} {
+        allow read: if autorizzato();
+        allow create: if autorizzato()
+          && request.resource.data.keys().hasOnly(['tipo', 'vecchio', 'nuovo', 'utente', 'data'])
+          && request.resource.data.tipo in ['vendita', 'acquisto']
+          && (request.resource.data.vecchio == null || request.resource.data.vecchio is int)
+          && (request.resource.data.nuovo == null || request.resource.data.nuovo is int)
+          && firmaValida(request.resource.data.utente)
+          && request.resource.data.data == request.time;
+        allow update, delete: if false;
+      }
+
+      // Registro delle modifiche all'anagrafica: solo creazione.
+      match /modifiche/{idModifica} {
+        allow read: if autorizzato();
+        allow create: if autorizzato()
+          && request.resource.data.keys().hasOnly(['azione', 'campi', 'utente', 'data'])
+          && request.resource.data.azione in ['inserimento', 'modifica', 'foto', 'archiviazione', 'ripristino']
+          && request.resource.data.campi is list
+          && request.resource.data.campi.size() <= 30
+          && firmaValida(request.resource.data.utente)
+          && request.resource.data.data == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------- Codici a barre (unicità) ----------
+    match /codici/{ean} {
+      allow read: if autorizzato();
+
+      // Si "prenota" un codice solo per un prodotto che, a fine
+      // scrittura, ha davvero quel codice.
+      allow create: if autorizzato()
+        && request.resource.data.keys().hasOnly(['idProdotto'])
+        && request.resource.data.idProdotto is string
+        && getAfter(/databases/$(database)/documents/prodotti/$(request.resource.data.idProdotto)).data.ean == ean;
+
+      // Si libera solo se il prodotto non usa più quel codice.
+      allow delete: if autorizzato()
+        && getAfter(/databases/$(database)/documents/prodotti/$(resource.data.idProdotto)).data.ean != ean;
+
+      allow update: if false;
+    }
+
+    // ---------- Movimenti di magazzino ----------
+    match /movimenti/{idMovimento} {
+      allow read: if autorizzato();
+
+      allow create: if autorizzato()
+        && request.resource.data.keys().hasOnly(
+             ['idProdotto', 'nomeProdotto', 'unita', 'tipo', 'delta', 'nota', 'utente', 'data'])
+        && request.resource.data.idProdotto is string
+        && testo(request.resource.data.nomeProdotto, 200)
+        && request.resource.data.unita in ['pz', 'kg', 'l']
+        && request.resource.data.delta is int
+        && request.resource.data.delta != 0
+        && (
+             (request.resource.data.tipo == 'carico' && request.resource.data.delta > 0)
+          || (request.resource.data.tipo == 'scarico' && request.resource.data.delta < 0)
+          ||  request.resource.data.tipo == 'rettifica'
+        )
+        && testo(request.resource.data.nota, 500)
+        && firmaValida(request.resource.data.utente)
+        && request.resource.data.data == request.time
+        // Il prodotto deve essere aggiornato nella stessa scrittura.
+        && getAfter(/databases/$(database)/documents/prodotti/$(request.resource.data.idProdotto)).data.ultimoMovimento == idMovimento;
+
+      allow update, delete: if false;
+    }
+
+    // ---------- Foto (una per prodotto, stesso ID) ----------
+    match /foto/{idProdotto} {
+      allow read: if autorizzato();
+
+      allow create, update: if autorizzato()
+        && request.resource.data.keys().hasOnly(
+             ['dati', 'formato', 'larghezza', 'altezza', 'dimensione', 'caricataDa', 'caricataIl'])
+        && request.resource.data.dati is bytes
+        && request.resource.data.dati.size() <= 300 * 1024
+        && request.resource.data.formato in ['image/jpeg', 'image/webp']
+        && firmaValida(request.resource.data.caricataDa)
+        && request.resource.data.caricataIl == request.time;
+
+      allow delete: if autorizzato();
+    }
+
+    // Tutto il resto è vietato (comportamento predefinito).
+  }
+}

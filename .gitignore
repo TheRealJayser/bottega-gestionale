@@ -1,0 +1,10 @@
+# Cache e log della CLI di Firebase
+.firebase/
+*-debug.log
+
+# Dipendenze (se un giorno useremo npm)
+node_modules/
+
+# File di sistema
+.DS_Store
+Thumbs.db
