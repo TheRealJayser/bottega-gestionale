@@ -8,3 +8,6 @@ node_modules/
 # File di sistema
 .DS_Store
 Thumbs.db
+
+# Copie di sicurezza fatte dagli script
+backup-*.json
